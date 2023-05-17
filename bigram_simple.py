@@ -9,15 +9,15 @@ from torch.nn import functional as F
 torch.manual_seed(1337)
 
 # Hyperparameters
-batch_size =   32  # number of independent sequences processed in parallel
-block_size =    8  # maximum context size for prediction
-opt_steps  = 3000  # number of optimization steps
-eval_freq  =  300  # frequency of evaluation
-eval_iters =  200  # number of random batches used to evaluate loss
-gen_length =  500  # length of generated text at the end
+g_batch_size =   32  # number of independent sequences processed in parallel
+g_block_size =    8  # maximum context size for prediction
+g_opt_steps  = 3000  # number of optimization steps
+g_eval_freq  =  300  # frequency of evaluation
+g_eval_iters =  200  # number of random batches used to evaluate loss
+g_gen_length =  500  # length of generated text at the end
 
-learning_rate = 1e-2
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+g_learning_rate = 1e-2
+g_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Download Shakespeare dataset
 # !wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt all_shakespeare.txt
@@ -45,10 +45,10 @@ val_data = data[n:]
 def get_batch(split):
     # Generate a small batch of data of inputs x and targets y
     data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([data[i:i+block_size] for i in ix])
-    y = torch.stack([data[i+1:i+block_size+1] for i in ix])
-    x, y = x.to(device), y.to(device)
+    ix = torch.randint(len(data) - g_block_size, (g_batch_size,))
+    x = torch.stack([data[i:i+g_block_size] for i in ix])
+    y = torch.stack([data[i+1:i+g_block_size+1] for i in ix])
+    x, y = x.to(g_device), y.to(g_device)
     return x, y
 
 # Loss
@@ -57,8 +57,8 @@ def estimate_loss():
     out = {}
     model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
+        losses = torch.zeros(g_eval_iters)
+        for k in range(g_eval_iters):
             X, Y = get_batch(split)
             logits, loss = model(X, Y)
             losses[k] = loss.item()
@@ -105,15 +105,15 @@ class BigramLanguageModel(nn.Module):
 
 # Instantiate model
 model = BigramLanguageModel(vocab_size)
-m = model.to(device)
+m = model.to(g_device)
 
 # Create pytorch optimizer
-optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(m.parameters(), lr=g_learning_rate)
 
 # Optimize
-for iter in range(opt_steps):
+for iter in range(g_opt_steps):
     # every once in a while evaluate model on train and val datasets
-    if iter % eval_freq == 0:
+    if iter % g_eval_freq == 0:
         losses = estimate_loss()
         print(f'step {iter}: train loss {losses["train"]:.4f}, val loss {losses["val"]:.4f}')
 
@@ -127,6 +127,6 @@ for iter in range(opt_steps):
     optimizer.step()
 
 # Generate from the model
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=gen_length)[0].tolist()))
+context = torch.zeros((1, 1), dtype=torch.long, device=g_device)
+print(decode(m.generate(context, max_new_tokens=g_gen_length)[0].tolist()))
 
