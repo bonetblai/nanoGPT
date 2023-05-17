@@ -22,29 +22,29 @@ g_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # Download Shakespeare dataset
 # !wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt all_shakespeare.txt
 with open('all_shakespeare.txt', 'r', encoding='utf-8') as fd:
-    text = fd.read()
+    g_text = fd.read()
 
 # Get vocabulary (i.e., characteres) in text
-chars = sorted(list(set(text)))
-vocab_size = len(chars)
+g_chars = sorted(list(set(g_text)))
+g_vocab_size = len(g_chars)
 
 # Create encoder/decoder of text
 # [a more sofisticated word-chunk level encoder/decoder can be found at tiktoken, or SentencePiece]
-stoi = { ch:i for i,ch in enumerate(chars) }
-itos = { i:ch for i,ch in enumerate(chars) }
-encode = lambda s: [stoi[ch] for ch in s]
-decode = lambda l: ''.join([itos[i] for i in l])
+g_stoi = { ch:i for i,ch in enumerate(g_chars) }
+g_itos = { i:ch for i,ch in enumerate(g_chars) }
+encode = lambda s: [g_stoi[ch] for ch in s]
+decode = lambda l: ''.join([g_itos[i] for i in l])
 
 # Encode entire text and store it in a pytorch tensor, split data into train and val sets
-data = torch.tensor(encode(text), dtype=torch.long)
-n = int(0.9 * len(data))
-train_data = data[:n]
-val_data = data[n:]
+g_data = torch.tensor(encode(g_text), dtype=torch.long)
+n = int(0.9 * len(g_data))
+g_train_data = g_data[:n]
+g_val_data = g_data[n:]
 
 # Data loading
 def get_batch(split):
     # Generate a small batch of data of inputs x and targets y
-    data = train_data if split == 'train' else val_data
+    data = g_train_data if split == 'train' else g_val_data
     ix = torch.randint(len(data) - g_block_size, (g_batch_size,))
     x = torch.stack([data[i:i+g_block_size] for i in ix])
     y = torch.stack([data[i+1:i+g_block_size+1] for i in ix])
@@ -55,15 +55,15 @@ def get_batch(split):
 @torch.no_grad()
 def estimate_loss():
     out = {}
-    model.eval()
+    g_model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(g_eval_iters)
         for k in range(g_eval_iters):
             X, Y = get_batch(split)
-            logits, loss = model(X, Y)
+            logits, loss = g_model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
-    model.train()
+    g_model.train()
     return out
 
 # Super simple bigram model
@@ -89,26 +89,26 @@ class BigramLanguageModel(nn.Module):
         return logits, loss
 
     def generate(self, idx, max_new_tokens):
-        # idx is (B,T) array of indices in current context
+        # idx is (B, T) array of indices in current context
         for _ in range(max_new_tokens):
             # get the prediction
             logits, loss = self(idx)
             # focus only on the last time step
-            logits = logits[:, -1, :] # becomes (B,C)
+            logits = logits[:, -1, :] # becomes (B, C)
             # apply softmax to get probability of next token
-            probs = F.softmax(logits, dim=-1) # (B,C)
+            probs = F.softmax(logits, dim=-1) # (B, C)
             # sample from distribution
             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
             # append sampled index to running sequence
-            idx = torch.cat([idx, idx_next], dim=1) # (B,T+1)
+            idx = torch.cat([idx, idx_next], dim=1) # (B, T+1)
         return idx
 
 # Instantiate model
-model = BigramLanguageModel(vocab_size)
-m = model.to(g_device)
+g_model = BigramLanguageModel(g_vocab_size)
+g_m = g_model.to(g_device)
 
 # Create pytorch optimizer
-optimizer = torch.optim.AdamW(m.parameters(), lr=g_learning_rate)
+g_optimizer = torch.optim.AdamW(g_m.parameters(), lr=g_learning_rate)
 
 # Optimize
 for iter in range(g_opt_steps):
@@ -121,12 +121,12 @@ for iter in range(g_opt_steps):
     xb, yb = get_batch('train')
 
     # evaluate the loss and do one optimizer step
-    logits, loss = m(xb, yb)
-    optimizer.zero_grad(set_to_none=True)
+    logits, loss = g_m(xb, yb)
+    g_optimizer.zero_grad(set_to_none=True)
     loss.backward()
-    optimizer.step()
+    g_optimizer.step()
 
 # Generate from the model
-context = torch.zeros((1, 1), dtype=torch.long, device=g_device)
-print(decode(m.generate(context, max_new_tokens=g_gen_length)[0].tolist()))
+g_context = torch.zeros((1, 1), dtype=torch.long, device=g_device)
+print(decode(g_m.generate(g_context, max_new_tokens=g_gen_length)[0].tolist()))
 
